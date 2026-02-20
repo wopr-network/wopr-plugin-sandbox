@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { buildSandboxCreateArgs } from "../src/docker.js";
+import { describe, expect, it } from "vitest";
+import { buildSandboxCreateArgs, execInContainerRaw } from "../src/docker.js";
 import type { SandboxDockerConfig } from "../src/types.docker.js";
 
 function makeDockerConfig(overrides?: Partial<SandboxDockerConfig>): SandboxDockerConfig {
@@ -305,6 +305,12 @@ describe("docker", () => {
       });
       const hostArgs = args.filter((_, i) => args[i - 1] === "--add-host");
       expect(hostArgs).toEqual(["host:1.2.3.4"]);
+    });
+  });
+
+  describe("execInContainerRaw", () => {
+    it("throws on empty argv", async () => {
+      await expect(execInContainerRaw("test-container", [])).rejects.toThrow("at least one element");
     });
   });
 });

@@ -40,12 +40,14 @@ export {
   ensureSandboxContainer,
   execDocker,
   execInContainer,
+  execInContainerRaw,
   removeSandboxContainer,
 } from "./docker.js";
 export { ensureDockerContainerIsRunning, maybePruneSandboxes, pruneAllSandboxes } from "./prune.js";
 export type { SandboxRegistryEntry } from "./registry.js";
 export { findRegistryEntry, listRegistryEntries, removeRegistryEntry, updateRegistry } from "./registry.js";
 export { resolveSandboxScopeKey, resolveSandboxWorkspaceDir, slugifySessionKey } from "./shared.js";
+export { shellEscapeArg, validateCommand } from "./shell-escape.js";
 export { filterToolsByPolicy, isToolAllowed, resolveSandboxToolPolicy } from "./tool-policy.js";
 export type {
   SandboxConfig,
@@ -83,6 +85,7 @@ const plugin: WOPRPlugin = {
       resolveSandboxContext: (await import("./context.js")).resolveSandboxContext,
       getSandboxWorkspaceInfo: (await import("./context.js")).getSandboxWorkspaceInfo,
       execInContainer: (await import("./docker.js")).execInContainer,
+      execInContainerRaw: (await import("./docker.js")).execInContainerRaw,
       execDocker: (await import("./docker.js")).execDocker,
       shouldSandbox: (await import("./config.js")).shouldSandbox,
       resolveSandboxConfig: (await import("./config.js")).resolveSandboxConfig,

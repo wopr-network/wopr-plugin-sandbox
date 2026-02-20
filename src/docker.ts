@@ -8,6 +8,7 @@ import { DEFAULT_SANDBOX_IMAGE } from "./constants.js";
 import { findRegistryEntry, updateRegistry } from "./registry.js";
 import { getLogger } from "./runtime.js";
 import { resolveSandboxScopeKey, slugifySessionKey } from "./shared.js";
+import { validateCommand } from "./shell-escape.js";
 import type { SandboxConfig, SandboxDockerConfig, SandboxWorkspaceAccess } from "./types.js";
 
 const HOT_CONTAINER_WINDOW_MS = 5 * 60 * 1000;
@@ -244,7 +245,8 @@ async function createSandboxContainer(params: {
   // Run setup command if specified
   if (cfg.setupCommand?.trim()) {
     getLogger().info(`[sandbox] Running setup command in ${name}`);
-    await execDocker(["exec", "-i", name, "sh", "-lc", cfg.setupCommand]);
+    const sanitizedSetup = validateCommand(cfg.setupCommand);
+    await execDocker(["exec", "-i", name, "sh", "-c", "--", sanitizedSetup]);
   }
 }
 
@@ -353,6 +355,7 @@ export async function execInContainer(
     timeout?: number;
   },
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  const sanitizedCommand = validateCommand(command);
   const args = ["exec", "-i"];
 
   if (opts?.workdir) {
@@ -365,7 +368,66 @@ export async function execInContainer(
     }
   }
 
-  args.push(containerName, "sh", "-lc", command);
+  args.push(containerName, "sh", "-c", "--", sanitizedCommand);
+
+  return new Promise((resolve, reject) => {
+    const child = spawn("docker", args, {
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: opts?.timeout ? opts.timeout * 1000 : undefined,
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout?.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString();
+    });
+    child.stderr?.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+
+    child.on("close", (code) => {
+      resolve({ stdout, stderr, exitCode: code ?? 0 });
+    });
+
+    child.on("error", (err) => {
+      reject(err);
+    });
+  });
+}
+
+/**
+ * Execute a command in a container WITHOUT shell interpretation.
+ * Takes an argument array that is passed directly to execFile inside the container.
+ * Use this when you have a known command + arguments and don't need shell features
+ * (pipes, redirects, globbing, etc.).
+ */
+export async function execInContainerRaw(
+  containerName: string,
+  argv: string[],
+  opts?: {
+    workdir?: string;
+    env?: Record<string, string>;
+    timeout?: number;
+  },
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  if (argv.length === 0) {
+    throw new Error("argv must contain at least one element (the command)");
+  }
+
+  const args = ["exec", "-i"];
+
+  if (opts?.workdir) {
+    args.push("-w", opts.workdir);
+  }
+
+  if (opts?.env) {
+    for (const [key, value] of Object.entries(opts.env)) {
+      args.push("-e", `${key}=${value}`);
+    }
+  }
+
+  args.push(containerName, ...argv);
 
   return new Promise((resolve, reject) => {
     const child = spawn("docker", args, {
