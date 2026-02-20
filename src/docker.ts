@@ -8,7 +8,7 @@ import { DEFAULT_SANDBOX_IMAGE } from "./constants.js";
 import { findRegistryEntry, updateRegistry } from "./registry.js";
 import { getLogger } from "./runtime.js";
 import { resolveSandboxScopeKey, slugifySessionKey } from "./shared.js";
-import { validateCommand } from "./shell-escape.js";
+import { validateCommand, validateEnvKey } from "./shell-escape.js";
 import type { SandboxConfig, SandboxDockerConfig, SandboxWorkspaceAccess } from "./types.js";
 
 const HOT_CONTAINER_WINDOW_MS = 5 * 60 * 1000;
@@ -364,6 +364,7 @@ export async function execInContainer(
 
   if (opts?.env) {
     for (const [key, value] of Object.entries(opts.env)) {
+      validateEnvKey(key);
       args.push("-e", `${key}=${value}`);
     }
   }
@@ -423,6 +424,7 @@ export async function execInContainerRaw(
 
   if (opts?.env) {
     for (const [key, value] of Object.entries(opts.env)) {
+      validateEnvKey(key);
       args.push("-e", `${key}=${value}`);
     }
   }
