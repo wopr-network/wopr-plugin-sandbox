@@ -52,7 +52,7 @@ export async function maybePruneSandboxes(cfg: SandboxConfig): Promise<void> {
 
   try {
     await pruneSandboxContainers(cfg);
-  } catch (error) {
+  } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     getLogger().warn(`[sandbox] Prune failed: ${message}`);
   }
