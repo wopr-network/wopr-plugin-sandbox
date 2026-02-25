@@ -61,17 +61,39 @@ export type {
   SandboxWorkspaceInfo,
 } from "./types.js";
 
+// Module-level state
+let ctx: WOPRPluginContext | null = null;
+const cleanups: Array<() => void> = [];
+
 const plugin: WOPRPlugin = {
   name: "wopr-plugin-sandbox",
   version: "1.0.0",
   description: "Docker-based session isolation — container lifecycle, per-session context, tool policy engine",
 
-  async init(ctx: WOPRPluginContext) {
+  manifest: {
+    name: "wopr-plugin-sandbox",
+    version: "1.0.0",
+    description: "Docker-based session isolation — container lifecycle, per-session context, tool policy engine",
+    capabilities: ["sandbox", "container-isolation", "tool-policy"],
+    category: "infrastructure",
+    tags: ["docker", "sandbox", "isolation", "security"],
+    icon: "shield",
+    requires: {
+      bins: ["docker"],
+    },
+    lifecycle: {
+      shutdownBehavior: "graceful",
+    },
+  },
+
+  async init(pluginCtx: WOPRPluginContext) {
+    ctx = pluginCtx;
+
     // Wire runtime dependencies from plugin context
     setRuntime({
       logger: ctx.log,
       storage: ctx.storage,
-      getMainConfig: (key?: string) => ctx.getMainConfig(key),
+      getMainConfig: (key?: string) => pluginCtx.getMainConfig(key),
     });
 
     // Initialize SQL storage schema
@@ -93,17 +115,31 @@ const plugin: WOPRPlugin = {
       filterToolsByPolicy: (await import("./tool-policy.js")).filterToolsByPolicy,
       pruneAllSandboxes: (await import("./prune.js")).pruneAllSandboxes,
     });
+    cleanups.push(() => ctx?.unregisterExtension("sandbox"));
 
     ctx.log.info("Sandbox plugin initialized");
   },
 
   async shutdown() {
-    // Clean up all sandbox containers on shutdown
-    try {
-      await pruneAllSandboxes();
-    } catch {
-      // Best effort cleanup
+    // Reverse all registrations
+    for (const cleanup of cleanups.splice(0)) {
+      try {
+        cleanup();
+      } catch {
+        // best effort
+      }
     }
+
+    // Clean up all sandbox containers on shutdown
+    if (ctx) {
+      try {
+        await pruneAllSandboxes();
+      } catch {
+        // Best effort cleanup
+      }
+    }
+
+    ctx = null;
   },
 };
 
